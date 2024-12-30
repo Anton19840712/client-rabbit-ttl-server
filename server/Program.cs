@@ -76,7 +76,7 @@ void StartConsuming()
 
 		try
 		{
-			await Task.Delay(10000); // Имитация обработки сообщения
+			await Task.Delay(10000); // Имитация обработки сообщения, здесь может быть ваш процесс, который будет продолжаться столько-то времени.
 
 			var response = $"Сообщение обработано: {message}";
 			var responseBody = Encoding.UTF8.GetBytes(response);
