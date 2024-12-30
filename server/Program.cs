@@ -2,7 +2,8 @@ using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Serilog;
 using System.Text;
-using System.Timers;
+
+Console.Title = "server";
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,24 +12,11 @@ Log.Logger = new LoggerConfiguration()
 	.WriteTo.Console()
 	.CreateLogger();
 
-// Добавление логирования в сервисы
-builder.Services.AddLogging(loggingBuilder =>
-{
-	loggingBuilder.AddSerilog();
-});
-
-int processingTimeLimit = 10; // Время обработки запроса в секундах
-int idleTimeout = 15000; // Тайм-аут простоя в миллисекундах
-DateTime lastMessageTime = DateTime.Now; // Время последнего сообщения
-System.Timers.Timer idleTimer = new System.Timers.Timer(idleTimeout);
-
-// Add services to the container
-builder.Services.AddControllers();
+builder.Host.UseSerilog();
 
 var app = builder.Build();
 
-// Логирование при запуске приложения
-app.Logger.LogInformation($"Приложение запущено с временем обработки запросов: {processingTimeLimit} секунд");
+Log.Information("Приложение запущено");
 
 // Настройка RabbitMQ
 var factory = new ConnectionFactory
@@ -36,85 +24,121 @@ var factory = new ConnectionFactory
 	HostName = "localhost",
 	Port = 5672,
 	UserName = "guest",
-	Password = "guest"
+	Password = "guest",
+	AutomaticRecoveryEnabled = false // Восстановление управляется вручную
 };
 
-var connection = factory.CreateConnection();
-var channel = connection.CreateModel();
+IConnection connection = null;
+IModel channel = null;
 
-channel.QueueDeclare(queue: "request_queue", durable: false, exclusive: false, autoDelete: false, arguments: null);
-channel.QueueDeclare(queue: "response_queue", durable: false, exclusive: false, autoDelete: false, arguments: null);
+// Таймеры
+var reconnectTimer = new System.Timers.Timer(5000); // Таймер восстановления соединения (5 секунд)
+var idleTimer = new System.Timers.Timer(15000);    // Таймер простоя (15 секунд)
 
-app.Logger.LogInformation("RabbitMQ Queues Initialized: request_queue, response_queue");
+// Состояние соединения
+bool isProcessingMessage = false; // Флаг для отслеживания обработки сообщения
 
-// Таймер для проверки простоя
-idleTimer.Elapsed += (sender, e) =>
+void ConnectToRabbitMQ()
 {
-	if ((DateTime.Now - lastMessageTime).TotalMilliseconds >= idleTimeout)
-	{
-		app.Logger.LogInformation("Тайм-аут простоя. Закрытие соединения с RabbitMQ.");
-		if (channel.IsOpen) channel.Close();
-		if (connection.IsOpen) connection.Close();
-		idleTimer.Stop();
-	}
-};
-
-// Подписка на запросы
-var consumer = new EventingBasicConsumer(channel);
-consumer.Received += async (model, ea) =>
-{
-	lastMessageTime = DateTime.Now; // Обновляем время последнего сообщения
-	if (!idleTimer.Enabled) idleTimer.Start(); // Запускаем таймер простоя
-
-	if (!connection.IsOpen || !channel.IsOpen)
-	{
-		app.Logger.LogInformation("Переподключение к RabbitMQ...");
-		connection = factory.CreateConnection();
-		channel = connection.CreateModel();
-		channel.QueueDeclare(queue: "request_queue", durable: false, exclusive: false, autoDelete: false, arguments: null);
-		channel.QueueDeclare(queue: "response_queue", durable: false, exclusive: false, autoDelete: false, arguments: null);
-		app.Logger.LogInformation("Соединение восстановлено.");
-	}
-
-	var body = ea.Body.ToArray();
-	var message = Encoding.UTF8.GetString(body);
-	app.Logger.LogInformation("Получен запрос: {Message}", message);
-
 	try
 	{
-		var cts = new CancellationTokenSource();
-		cts.CancelAfter(processingTimeLimit * 1000); // Устанавливаем лимит времени на обработку сообщений
+		Log.Information("Попытка подключения к RabbitMQ...");
+		connection = factory.CreateConnection();
+		channel = connection.CreateModel();
 
-		app.Logger.LogInformation("Начало обработки данных...");
-		await Task.Delay(TimeSpan.FromSeconds(processingTimeLimit), cts.Token); // Имитация обработки данных
+		channel.QueueDeclare(queue: "request_queue", durable: false, exclusive: false, autoDelete: false, arguments: null);
+		channel.QueueDeclare(queue: "response_queue", durable: false, exclusive: false, autoDelete: false, arguments: null);
+		channel.BasicQos(0, prefetchCount: 1, global: false);
 
-		var response = $"Данные для запроса '{message}' обработаны за {processingTimeLimit} секунд.";
-		var responseBody = Encoding.UTF8.GetBytes(response);
-
-		if (channel.IsOpen)
-		{
-			channel.BasicPublish(exchange: "", routingKey: "response_queue", basicProperties: null, body: responseBody);
-			app.Logger.LogInformation("Результат отправлен: {Response}", response);
-		}
-	}
-	catch (OperationCanceledException)
-	{
-		app.Logger.LogWarning($"Возможность обработки данных по за установленный интервал закончен, так как лимит времени в {processingTimeLimit} секунд истек.");
-		var timeoutResponse = $"Возможность обработки данных по за установленный интервал закончен, так как лимит времени в {processingTimeLimit} секунд истек.";
-		var timeoutBody = Encoding.UTF8.GetBytes(timeoutResponse);
-
-		if (channel.IsOpen)
-		{
-			channel.BasicPublish(exchange: "", routingKey: "response_queue", basicProperties: null, body: timeoutBody);
-		}
+		Log.Information("Соединение с RabbitMQ установлено");
+		reconnectTimer.Stop(); // Останавливаем таймер восстановления
+		idleTimer.Start(); // Запускаем таймер простоя
+		StartConsuming();
 	}
 	catch (Exception ex)
 	{
-		app.Logger.LogError(ex, "Ошибка при обработке запроса");
+		Log.Error(ex, "Ошибка подключения к RabbitMQ. Повтор через 5 секунд...");
+		reconnectTimer.Start(); // Если не удалось, продолжаем попытки
+	}
+}
+
+void StartConsuming()
+{
+	var consumer = new EventingBasicConsumer(channel);
+	consumer.Received += async (model, ea) =>
+	{
+		isProcessingMessage = true;
+		idleTimer.Stop(); // Останавливаем таймер простоя, так как пришло сообщение
+
+		var body = ea.Body.ToArray();
+		var message = Encoding.UTF8.GetString(body);
+		Log.Information("Получено сообщение: {Message}", message);
+
+		try
+		{
+			await Task.Delay(10000); // Имитация обработки сообщения
+
+			var response = $"Сообщение обработано: {message}";
+			var responseBody = Encoding.UTF8.GetBytes(response);
+
+			channel.BasicPublish(exchange: "", routingKey: "response_queue", basicProperties: null, body: responseBody);
+			channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false); // Подтверждение
+			Log.Information("Ответ отправлен: {Response}", response);
+		}
+		catch (Exception ex)
+		{
+			Log.Error(ex, "Ошибка при обработке сообщения");
+			channel.BasicNack(deliveryTag: ea.DeliveryTag, multiple: false, requeue: true); // Вернуть сообщение в очередь
+		}
+		finally
+		{
+			isProcessingMessage = false;
+			idleTimer.Start(); // Возобновляем таймер простоя
+		}
+	};
+
+	channel.BasicConsume(queue: "request_queue", autoAck: false, consumer: consumer);
+}
+
+// Таймер для разрыва соединения при простое
+idleTimer.Elapsed += (sender, e) =>
+{
+	if (!isProcessingMessage) // Если сообщений нет
+	{
+		Log.Information("Простой 15 секунд. Соединение с RabbitMQ будет закрыто.");
+		CloseConnection();
+		reconnectTimer.Start(); // Начинаем восстановление через 5 секунд
 	}
 };
 
-// Подключаемся к очереди
-channel.BasicConsume(queue: "request_queue", autoAck: true, consumer: consumer);
+// Таймер на восстановление соединения
+reconnectTimer.Elapsed += (sender, e) =>
+{
+	if (connection == null || !connection.IsOpen)
+	{
+		ConnectToRabbitMQ();
+	}
+};
+
+// Закрытие соединения
+void CloseConnection()
+{
+	idleTimer.Stop();
+
+	if (channel?.IsOpen == true)
+	{
+		channel.Close();
+	}
+
+	if (connection?.IsOpen == true)
+	{
+		connection.Close();
+	}
+
+	Log.Information("Соединение с RabbitMQ закрыто");
+}
+
+// Начало работы
+ConnectToRabbitMQ();
 
 app.Run();

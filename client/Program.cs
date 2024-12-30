@@ -4,8 +4,16 @@ using RabbitMQ.Client.Events;
 using Serilog;
 using System.Text;
 
-var builder = WebApplication.CreateBuilder(args);
+
 Console.Title = "client";
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Регистрация RabbitMqService как Singleton
+builder.Services.AddSingleton<IRabbitMqService, RabbitMqService>();
+
+// Регистрация ResponseListenerService как фонового сервиса
+builder.Services.AddHostedService<ResponseListenerService>();
 
 // Настройка Serilog
 Log.Logger = new LoggerConfiguration()
@@ -34,7 +42,7 @@ app.MapPost("/send-request", async (HttpRequest request, IRabbitMqService rabbit
 	var responseMessage = await rabbitMqService.WaitForResponse("response_queue");
 	if (responseMessage != null)
 	{
-		Log.Information("Получен ответ: {ResponseMessage}", responseMessage);
+		Log.Information($"Получен ответ: {responseMessage}");
 		return Results.Ok(new { Message = responseMessage });
 	}
 
