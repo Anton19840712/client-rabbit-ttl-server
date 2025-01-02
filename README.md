@@ -12,6 +12,8 @@ This project provides a Lua script to configure and run a .NET server applicatio
 
 - .NET SDK (to run the server DLL)
 
+- Rabbit
+
 - A valid config.json file in the script directory
 
 - Configuration File
@@ -38,8 +40,26 @@ Parameter Descriptions:
 
 Setting Up Environment
 
-- Install the Lua libraries:
+- Install Rabbit
+```sh
+version: '3.8'
 
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq_management
+    ports:
+      - "5672:5672" # AMQP
+      - "15672:15672" # RabbitMQ management UI
+    volumes:
+      - /docker_conf/rabbitmq/data/:/var/lib/rabbitmq/
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    restart: always
+```
+
+- Install the Lua libraries:
 ```sh
 luarocks install dkjson
 luarocks install luafilesystem
