@@ -16,16 +16,6 @@ Lua JSON library (e.g., Lua CJSON)
 
 A valid config.json file in the script directory
 
-# Sample file structure
-
-```sh
-project-directory/
-├── server_config.json       # Configuration file with server parameters
-├── run_server.lua    # Lua script to read config and run server
-├── server/           # Directory containing .NET server application
-│   └── bin/Debug/net8.0/server.dll  # Compiled server application
-```
-
 Configuration File
 
 #  The config.json file should include the following parameters:
@@ -53,8 +43,6 @@ Parameter Descriptions:
 
 Setting Up Environment
 
-- Ensure the Lua interpreter is installed and accessible from the command line.
-
 - Install the Lua libraries:
 
 ```sh
@@ -71,10 +59,15 @@ Running the Script
 
 - Open the terminal in the project directory.
 
-- Execute the Lua scripts:
+- Execute the Lua scripts in each cmd window:
 
 ```sh
 chcp 65001
+```
+
+- Execute the Lua scripts in each cmd window per command:
+
+```sh
 lua run_client.lua 5002
 lua send_message.lua 5002 "{\"id\":1,\"message\":\"Hello, server!\",\"timestamp\":\"2024-12-31T12:00:00Z\"}"
 lua run_server.lua
