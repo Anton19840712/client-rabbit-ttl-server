@@ -1,19 +1,12 @@
-# client-rabbit-server with ttl and lua
+# Client-rabbit-server with ttl and lua app
 
-# # Lua Server Configuration and Execution
+# Lua Server Configuration and Execution
 
-# # Overview
+# Overview
 
 This project provides a Lua script to configure and run a .NET server application. The configuration is managed via a JSON file and executed with Lua scripting for dynamic parameter handling.
 
-```sh
-chcp 65001
-lua run_client.lua 5002
-lua send_message.lua 5002 "{\"id\":1,\"message\":\"Hello, server!\",\"timestamp\":\"2024-12-31T12:00:00Z\"}"
-lua run_server.lua
-```
-
-# #Requirements
+# Requirements
 
 Lua interpreter
 
@@ -23,7 +16,7 @@ Lua JSON library (e.g., Lua CJSON)
 
 A valid config.json file in the script directory
 
-# # File Structure
+# File Structure
 
 project-directory/
 ├── server_config.json       # Configuration file with server parameters
@@ -33,7 +26,7 @@ project-directory/
 
 Configuration File
 
-# #  The config.json file should include the following parameters:
+#  The config.json file should include the following parameters:
 
 ```sh
 {
@@ -54,13 +47,13 @@ Parameter Descriptions:
 
 - ProcessingDelay: Time in milliseconds to simulate processing delay.
 
-## Usage
+# Usage
 
 Setting Up Environment
 
 - Ensure the Lua interpreter is installed and accessible from the command line.
 
-- Install the Lua JSON library:
+- Install the Lua libraries:
 
 ```sh
 luarocks install dkjson
@@ -76,42 +69,11 @@ Running the Script
 
 - Open the terminal in the project directory.
 
-- Execute the Lua script:
+- Execute the Lua scripts:
 
 ```sh
+chcp 65001
+lua run_client.lua 5002
+lua send_message.lua 5002 "{\"id\":1,\"message\":\"Hello, server!\",\"timestamp\":\"2024-12-31T12:00:00Z\"}"
 lua run_server.lua
 ```
-
-Expected Output
-
-The script reads the config.json file, forms a command, and executes the .NET server application. Example:
-
-```sh
-Запуск приложения на порту: 5002
-Выполняется команда: dotnet "../server/bin/Debug/net8.0/server.dll" --port=5002 --reconnect-timer=5000 --idle-timer=15000 --processing-delay=10000
-Приложение успешно запущено на порту 5002
-```
-
-Error Handling
-
-If the configuration file is missing or invalid, the script terminates with an error.
-
-If the server application fails to execute, the script logs the error.
-
-Customization
-
-To modify the configuration, edit the config.json file and rerun the script. For advanced configurations, extend the Lua script to handle additional parameters or dynamic inputs.
-
-Troubleshooting
-
-Ensure all required libraries are installed.
-
-Verify the .NET server application is compiled and located at the expected path.
-
-Check config.json for syntax errors or missing parameters.
-
-License
-
-MIT
-
-Free Software, Hell Yeah!
