@@ -1,16 +1,9 @@
 using client;
-using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
 using Serilog;
-using System.Text;
-
 
 Console.Title = "client";
 
 var builder = WebApplication.CreateBuilder(args);
-
-// Регистрация RabbitMqService как Singleton
-builder.Services.AddSingleton<IRabbitMqService, RabbitMqService>();
 
 // Регистрация ResponseListenerService как фонового сервиса
 builder.Services.AddHostedService<ResponseListenerService>();
@@ -21,6 +14,22 @@ Log.Logger = new LoggerConfiguration()
 	.CreateLogger();
 
 builder.Host.UseSerilog();
+
+// Чтение порта для запуска client
+string? port = builder.Configuration["Port"]
+			   ?? args.FirstOrDefault(arg => arg.StartsWith("--port="))?.Split('=')[1];
+
+if (string.IsNullOrEmpty(port))
+{
+	port = "5001"; // Порт по умолчанию
+}
+
+// Настройка адреса запуска
+string url = $"http://localhost:{port}";
+builder.WebHost.UseUrls(url);
+
+// Логирование адреса запуска
+Log.Information("Приложение client запускается на {Url}", url);
 
 builder.Services.AddSingleton<IRabbitMqService, RabbitMqService>();
 

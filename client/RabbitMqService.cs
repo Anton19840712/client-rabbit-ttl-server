@@ -41,7 +41,7 @@ public class RabbitMqService : IRabbitMqService
 		return PersistentConnection;
 	}
 
-	// Ожидание ответа с таймаутом
+	// Ожидание ответа с таймаутом, если ответ не получен, соединение прекращается
 	public async Task<string?> WaitForResponse(string queueName, int timeoutMilliseconds = 15000)
 	{
 		using var channel = PersistentConnection.CreateModel();

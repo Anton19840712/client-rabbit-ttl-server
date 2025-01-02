@@ -1,5 +1,0 @@
-{
-  "processing_time": 10000,
-  "idle_timeout": 15000,
-  "reconnect_interval": 5000
-}

@@ -18,6 +18,19 @@ var app = builder.Build();
 
 Log.Information("Приложение запущено");
 
+// Получение параметров из аргументов командной строки
+var port = GetArgument(args, "--port", 5673);
+var reconnectTimerInterval = GetArgument(args, "--reconnect-timer", 5000);
+var idleTimerInterval = GetArgument(args, "--idle-timer", 15000);
+var processingDelay = GetArgument(args, "--processing-delay", 10000);
+
+// Настройка адреса запуска
+string url = $"http://localhost:{port}";
+builder.WebHost.UseUrls(url);
+
+// Логирование адреса запуска
+Log.Information("Приложение client запускается на {Url}", url);
+
 // Настройка RabbitMQ
 var factory = new ConnectionFactory
 {
@@ -32,11 +45,11 @@ IConnection connection = null;
 IModel channel = null;
 
 // Таймеры
-var reconnectTimer = new System.Timers.Timer(5000); // Таймер восстановления соединения (5 секунд)
-var idleTimer = new System.Timers.Timer(15000);    // Таймер простоя (15 секунд)
+var reconnectTimer = new System.Timers.Timer(reconnectTimerInterval);
+var idleTimer = new System.Timers.Timer(idleTimerInterval);
 
 // Состояние соединения
-bool isProcessingMessage = false; // Флаг для отслеживания обработки сообщения
+bool isProcessingMessage = false;
 
 void ConnectToRabbitMQ()
 {
@@ -51,14 +64,14 @@ void ConnectToRabbitMQ()
 		channel.BasicQos(0, prefetchCount: 1, global: false);
 
 		Log.Information("Соединение с RabbitMQ установлено");
-		reconnectTimer.Stop(); // Останавливаем таймер восстановления
-		idleTimer.Start(); // Запускаем таймер простоя
+		reconnectTimer.Stop();
+		idleTimer.Start();
 		StartConsuming();
 	}
 	catch (Exception ex)
 	{
-		Log.Error(ex, "Ошибка подключения к RabbitMQ. Повтор через 5 секунд...");
-		reconnectTimer.Start(); // Если не удалось, продолжаем попытки
+		Log.Error(ex, "Ошибка подключения к RabbitMQ. Повтор через {Interval} мс...", reconnectTimerInterval);
+		reconnectTimer.Start();
 	}
 }
 
@@ -68,7 +81,7 @@ void StartConsuming()
 	consumer.Received += async (model, ea) =>
 	{
 		isProcessingMessage = true;
-		idleTimer.Stop(); // Останавливаем таймер простоя, так как пришло сообщение
+		idleTimer.Stop();
 
 		var body = ea.Body.ToArray();
 		var message = Encoding.UTF8.GetString(body);
@@ -76,42 +89,40 @@ void StartConsuming()
 
 		try
 		{
-			await Task.Delay(10000); // Имитация обработки сообщения, здесь может быть ваш процесс, который будет продолжаться столько-то времени.
+			await Task.Delay(processingDelay);
 
 			var response = $"Сообщение обработано: {message}";
 			var responseBody = Encoding.UTF8.GetBytes(response);
 
 			channel.BasicPublish(exchange: "", routingKey: "response_queue", basicProperties: null, body: responseBody);
-			channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false); // Подтверждение
+			channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
 			Log.Information("Ответ отправлен: {Response}", response);
 		}
 		catch (Exception ex)
 		{
 			Log.Error(ex, "Ошибка при обработке сообщения");
-			channel.BasicNack(deliveryTag: ea.DeliveryTag, multiple: false, requeue: true); // Вернуть сообщение в очередь
+			channel.BasicNack(deliveryTag: ea.DeliveryTag, multiple: false, requeue: true);
 		}
 		finally
 		{
 			isProcessingMessage = false;
-			idleTimer.Start(); // Возобновляем таймер простоя
+			idleTimer.Start();
 		}
 	};
 
 	channel.BasicConsume(queue: "request_queue", autoAck: false, consumer: consumer);
 }
 
-// Таймер для разрыва соединения при простое
 idleTimer.Elapsed += (sender, e) =>
 {
-	if (!isProcessingMessage) // Если сообщений нет
+	if (!isProcessingMessage)
 	{
-		Log.Information("Простой 15 секунд. Соединение с RabbitMQ будет закрыто.");
+		Log.Information("Простой {Interval} мс. Соединение с RabbitMQ будет закрыто.", idleTimerInterval);
 		CloseConnection();
-		reconnectTimer.Start(); // Начинаем восстановление через 5 секунд
+		reconnectTimer.Start();
 	}
 };
 
-// Таймер на восстановление соединения
 reconnectTimer.Elapsed += (sender, e) =>
 {
 	if (connection == null || !connection.IsOpen)
@@ -120,7 +131,6 @@ reconnectTimer.Elapsed += (sender, e) =>
 	}
 };
 
-// Закрытие соединения
 void CloseConnection()
 {
 	idleTimer.Stop();
@@ -136,6 +146,16 @@ void CloseConnection()
 	}
 
 	Log.Information("Соединение с RabbitMQ закрыто");
+}
+
+static int GetArgument(string[] args, string key, int defaultValue)
+{
+	var arg = args.FirstOrDefault(a => a.StartsWith(key + "="));
+	if (arg != null && int.TryParse(arg.Substring(key.Length + 1), out var value))
+	{
+		return value;
+	}
+	return defaultValue;
 }
 
 // Начало работы

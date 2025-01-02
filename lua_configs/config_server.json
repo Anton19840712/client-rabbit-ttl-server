@@ -1,0 +1,6 @@
+{
+  "Port": 5003,
+  "ProcessingDelay": 10000,
+  "IdleTimer": 15000,
+  "ReconnectTimer": 5000
+}
