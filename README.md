@@ -1,6 +1,4 @@
-# Client-rabbit-server with ttl and lua app
-
-# Lua Server Configuration and Execution
+# Client-rabbit-server prototype app with ttl aspect and lua commands
 
 # Overview
 
@@ -8,15 +6,15 @@ This project provides a Lua script to configure and run a .NET server applicatio
 
 # Requirements
 
-Lua interpreter
+- Lua interpreter
 
-Lua JSON library (e.g., Lua CJSON)
+- Lua JSON library (e.g., Lua CJSON)
 
-.NET SDK (to run the server DLL)
+- .NET SDK (to run the server DLL)
 
-A valid config.json file in the script directory
+- A valid config.json file in the script directory
 
-Configuration File
+- Configuration File
 
 #  The config.json file should include the following parameters:
 
@@ -32,11 +30,8 @@ Configuration File
 Parameter Descriptions:
 
 - Port: Port number on which the server will listen.
-
 - ReconnectTimer: Time in milliseconds for reconnection attempts.
-
 - IdleTimer: Time in milliseconds for idle timeout.
-
 - ProcessingDelay: Time in milliseconds to simulate processing delay.
 
 # Usage
@@ -59,13 +54,13 @@ Running the Script
 
 - Open the terminal in the project directory.
 
-- Execute the Lua scripts in each cmd window:
+- Execute window command in each cmd window:
 
 ```sh
 chcp 65001
 ```
 
-- Execute the Lua scripts in each cmd window per command:
+- Execute the Lua script in each cmd window per command:
 
 ```sh
 lua run_client.lua 5002
