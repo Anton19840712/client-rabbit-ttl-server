@@ -16,13 +16,15 @@ Lua JSON library (e.g., Lua CJSON)
 
 A valid config.json file in the script directory
 
-# File Structure
+# Sample file structure
 
+```sh
 project-directory/
 ├── server_config.json       # Configuration file with server parameters
 ├── run_server.lua    # Lua script to read config and run server
 ├── server/           # Directory containing .NET server application
 │   └── bin/Debug/net8.0/server.dll  # Compiled server application
+```
 
 Configuration File
 
